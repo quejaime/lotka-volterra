@@ -1,0 +1,276 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulateur Proie-Prédateur de Lotka-Volterra (RK4)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .slider-label { @apply block text-sm font-medium text-gray-700 mb-1; }
+        .slider-input { @apply w-full h-2 bg-blue-100 rounded-lg appearance-none cursor-pointer accent-blue-600; }
+        .param-card { @apply bg-white p-4 rounded-xl shadow-sm border border-gray-100; }
+        .instruction-pulse {
+            animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+        }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: .5; }
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans text-gray-900">
+
+    <header class="bg-slate-800 text-white py-6 shadow-lg">
+        <div class="container mx-auto px-4 text-center">
+            <h1 class="text-3xl font-bold">Modèle de Lotka-Volterra</h1>
+            <p class="mt-2 text-slate-300 underline decoration-blue-500 italic">Interactivité avancée : Cliquez sur l'espace des phases</p>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 py-8 max-w-6xl">
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            
+            <!-- Contrôles -->
+            <div class="space-y-4">
+                <section class="param-card">
+                    <h2 class="font-bold text-lg mb-4 text-blue-700">🌱 Proies (x)</h2>
+                    <div class="mb-4">
+                        <label class="slider-label">Croissance ($\alpha$) : <span id="val-alpha" class="font-mono text-blue-600"></span></label>
+                        <input type="range" id="alpha" min="0.1" max="1.5" step="0.01" value="0.67" class="slider-input">
+                    </div>
+                    <div>
+                        <label class="slider-label">Prédation ($\beta$) : <span id="val-beta" class="font-mono text-blue-600"></span></label>
+                        <input type="range" id="beta" min="0.01" max="0.5" step="0.01" value="0.33" class="slider-input">
+                    </div>
+                </section>
+
+                <section class="param-card">
+                    <h2 class="font-bold text-lg mb-4 text-red-700">🐺 Prédateurs (y)</h2>
+                    <div class="mb-4">
+                        <label class="slider-label">Reproduction ($\delta$) : <span id="val-delta" class="font-mono text-red-600"></span></label>
+                        <input type="range" id="delta" min="0.01" max="0.5" step="0.01" value="0.33" class="slider-input">
+                    </div>
+                    <div>
+                        <label class="slider-label">Mortalité ($\gamma$) : <span id="val-gamma" class="font-mono text-red-600"></span></label>
+                        <input type="range" id="gamma" min="0.1" max="2.0" step="0.1" value="1.0" class="slider-input">
+                    </div>
+                </section>
+
+                <section class="param-card">
+                    <h2 class="font-bold text-lg mb-2 text-purple-700">📍 État Initial</h2>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="text-xs font-bold uppercase text-gray-500">Proies (x0)</label>
+                            <input type="number" id="x0" value="2.0" step="0.1" class="w-full border rounded p-1 focus:ring-2 focus:ring-purple-200 outline-none">
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold uppercase text-gray-500">Pred (y0)</label>
+                            <input type="number" id="y0" value="0.5" step="0.1" class="w-full border rounded p-1 focus:ring-2 focus:ring-purple-200 outline-none">
+                        </div>
+                    </div>
+                    <p class="text-[10px] mt-2 text-gray-400 italic text-center instruction-pulse">💡 Astuce : Vous pouvez aussi cliquer directement dans le graphique du bas</p>
+                    <button id="reset-btn" class="mt-4 w-full bg-slate-700 hover:bg-slate-800 text-white font-bold py-2 px-4 rounded transition shadow-md">Réinitialiser Simulation</button>
+                </section>
+            </div>
+
+            <!-- Graphiques -->
+            <div class="lg:col-span-2 space-y-6">
+                <!-- Séries Temporelles -->
+                <div class="bg-white p-4 rounded-xl shadow border h-[350px] relative">
+                    <canvas id="timeChart"></canvas>
+                </div>
+                
+                <!-- Portrait de Phase -->
+                <div class="bg-white p-4 rounded-xl shadow border h-[350px] relative cursor-crosshair group">
+                    <div class="absolute top-2 right-4 z-10 bg-purple-100 text-purple-700 text-[11px] px-2 py-1 rounded-full font-bold border border-purple-200 opacity-80 group-hover:opacity-100 transition">
+                         Cliquer pour définir (x₀, y₀)
+                    </div>
+                    <canvas id="phaseChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <footer class="mt-8 p-6 bg-white rounded-xl shadow border border-gray-100">
+            <h3 class="font-bold text-lg mb-2">Instructions Pédagogiques</h3>
+            <p class="text-gray-600 text-sm leading-relaxed mb-4">
+                Le <strong>Portrait de Phase</strong> permet de visualiser l'état du système indépendamment du temps. 
+                Chaque point $(x, y)$ représente un couple de populations. 
+            </p>
+            <ul class="text-gray-600 text-sm list-disc list-inside space-y-1">
+                <li><strong>Clic direct :</strong> Explorez différentes conditions initiales en cliquant n'importe où sur le graphique du bas.</li>
+                <li><strong>Stabilité :</strong> Essayez de cliquer près du centre des orbites pour trouver le point d'équilibre fixe.</li>
+                <li><strong>RK4 :</strong> Observez que les trajectoires reviennent exactement à leur point de départ, illustrant la conservation de la "quantité" propre au modèle de Lotka-Volterra.</li>
+            </ul>
+        </footer>
+    </main>
+
+    <script>
+        let params = {
+            alpha: 0.67,
+            beta: 0.33,
+            delta: 0.33,
+            gamma: 1.0,
+            x0: 2.0,
+            y0: 0.5,
+            dt: 0.04,
+            steps: 2500
+        };
+
+        let timeChart, phaseChart;
+
+        // Équations différentielles
+        function f(x, y) {
+            return {
+                dx: params.alpha * x - params.beta * x * y,
+                dy: params.delta * x * y - params.gamma * y
+            };
+        }
+
+        // Intégrateur Runge-Kutta 4
+        function computeRK4() {
+            let x = params.x0;
+            let y = params.y0;
+            const dataX = [x];
+            const dataY = [y];
+            const labels = [0];
+
+            for (let i = 1; i < params.steps; i++) {
+                let k1 = f(x, y);
+                let k2 = f(x + 0.5 * params.dt * k1.dx, y + 0.5 * params.dt * k1.dy);
+                let k3 = f(x + 0.5 * params.dt * k2.dx, y + 0.5 * params.dt * k2.dy);
+                let k4 = f(x + params.dt * k3.dx, y + params.dt * k3.dy);
+
+                x += (params.dt / 6) * (k1.dx + 2 * k2.dx + 2 * k3.dx + k4.dx);
+                y += (params.dt / 6) * (k1.dy + 2 * k2.dy + 2 * k3.dy + k4.dy);
+
+                x = Math.max(1e-4, x);
+                y = Math.max(1e-4, y);
+
+                dataX.push(x);
+                dataY.push(y);
+                labels.push((i * params.dt).toFixed(1));
+            }
+            return { dataX, dataY, labels };
+        }
+
+        function initCharts() {
+            const commonOptions = {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                elements: { point: { radius: 0 }, line: { tension: 0.1 } }
+            };
+
+            timeChart = new Chart(document.getElementById('timeChart'), {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        { label: 'Proies (x)', borderColor: '#3b82f6', data: [], borderWidth: 2, fill: false },
+                        { label: 'Prédateurs (y)', borderColor: '#ef4444', data: [], borderWidth: 2, fill: false }
+                    ]
+                },
+                options: { ...commonOptions, 
+                    plugins: { title: { display: true, text: 'Évolution Temporelle des Populations' } },
+                    scales: { 
+                        y: { beginAtZero: true, title: { display: true, text: 'Effectif' } },
+                        x: { title: { display: true, text: 'Temps' } }
+                    }
+                }
+            });
+
+            phaseChart = new Chart(document.getElementById('phaseChart'), {
+                type: 'line',
+                data: {
+                    datasets: [{
+                        label: 'Orbite cyclique',
+                        borderColor: '#8b5cf6',
+                        data: [],
+                        borderWidth: 2,
+                        showLine: true,
+                        fill: false // Correction du bug visuel de remplissage
+                    },
+                    {
+                        label: 'Condition Initiale',
+                        data: [],
+                        pointRadius: 6,
+                        pointBackgroundColor: '#9333ea',
+                        pointBorderColor: '#fff',
+                        pointBorderWidth: 2,
+                        showLine: false
+                    }]
+                },
+                options: { ...commonOptions,
+                    plugins: { 
+                        title: { display: true, text: 'Espace des Phases (Proies vs Prédateurs)' },
+                        legend: { display: false }
+                    },
+                    scales: { 
+                        x: { type: 'linear', title: { display: true, text: 'Proies (x)' }, beginAtZero: true, min: 0, max: 10 },
+                        y: { type: 'linear', title: { display: true, text: 'Prédateurs (y)' }, beginAtZero: true, min: 0, max: 8 }
+                    },
+                    onClick: (e) => {
+                        const canvasPosition = Chart.helpers.getRelativePosition(e, phaseChart);
+                        const dataX = phaseChart.scales.x.getValueForPixel(canvasPosition.x);
+                        const dataY = phaseChart.scales.y.getValueForPixel(canvasPosition.y);
+
+                        if (dataX >= 0 && dataY >= 0) {
+                            params.x0 = parseFloat(dataX.toFixed(2));
+                            params.y0 = parseFloat(dataY.toFixed(2));
+                            document.getElementById('x0').value = params.x0;
+                            document.getElementById('y0').value = params.y0;
+                            update();
+                        }
+                    }
+                }
+            });
+        }
+
+        function update() {
+            const res = computeRK4();
+            
+            timeChart.data.labels = res.labels;
+            timeChart.data.datasets[0].data = res.dataX;
+            timeChart.data.datasets[1].data = res.dataY;
+            timeChart.update('none');
+
+            phaseChart.data.datasets[0].data = res.dataX.map((v, i) => ({ x: v, y: res.dataY[i] }));
+            phaseChart.data.datasets[1].data = [{x: params.x0, y: params.y0}];
+            phaseChart.update('none');
+        }
+
+        const controls = ['alpha', 'beta', 'delta', 'gamma'];
+        controls.forEach(id => {
+            const input = document.getElementById(id);
+            const display = document.getElementById('val-' + id);
+            display.textContent = input.value;
+            input.oninput = () => {
+                params[id] = parseFloat(input.value);
+                display.textContent = input.value;
+                update();
+            };
+        });
+
+        ['x0', 'y0'].forEach(id => {
+            const input = document.getElementById(id);
+            input.oninput = () => {
+                const val = parseFloat(input.value);
+                if (!isNaN(val)) {
+                    params[id] = val;
+                    update();
+                }
+            };
+        });
+
+        document.getElementById('reset-btn').onclick = () => {
+            location.reload();
+        };
+
+        window.onload = () => {
+            initCharts();
+            update();
+        };
+    </script>
+</body>
+</html>
